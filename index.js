@@ -2,9 +2,10 @@ const workerpool = require('workerpool');
 const express = require('express');
 const app = express();
 
-app.get('/', (req, res) => {
-    const pool = workerpool.pool(__dirname + '/workerPool.js', {maxWorkers: 2});
+const pool = workerpool.pool(__dirname + '/workerPool.js', {maxWorkers: 2});
 
+
+app.get('/', (req, res) => {
     // Pass arguments to the hardOperation function
     const coeffitient = 1.1;
     pool.exec('hardOperation', [coeffitient])
