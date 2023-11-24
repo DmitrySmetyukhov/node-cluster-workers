@@ -1,24 +1,40 @@
-const workerpool = require('workerpool');
+const { fork } = require('child_process');
 const express = require('express');
 const app = express();
 
-app.get('/', (req, res) => {
-    const pool = workerpool.pool(__dirname + '/workerPool.js', {maxWorkers: 2});
+const MAX_CONCURRENT_FORKS = 1; // Set your desired maximum number of concurrent forks
+const taskQueue = [];
+let activeForks = 0;
 
-    // Pass arguments to the hardOperation function
-    const coeffitient = 1.1;
-    pool.exec('hardOperation', [coeffitient])
-        .then(function (result) {
-            console.log(result)
-            res.send({ result});
-        })
-        .catch(function (err) {
-            console.error(err);
-        })
-        .then(function () {
-            console.log('worker is terminated. work is done!')
-            pool.terminate(); // terminate all workers when done
+function processQueue() {
+    if (taskQueue.length > 0 && activeForks < MAX_CONCURRENT_FORKS) {
+        const { functionName, args, res } = taskQueue.shift();
+
+        const worker = fork('./workerFork.js');
+        activeForks++;
+
+        worker.send({ functionName, args });
+
+        worker.on('message', (message) => {
+            console.log(message)
+            res.send({ result: message.result });
+            worker.kill();
+            activeForks--;
+
+            // Process the next task in the queue
+            processQueue();
         });
+    }
+}
+
+app.get('/', (req, res) => {
+    const coeffitient = 1.1;
+
+    // Enqueue the task
+    taskQueue.push({ functionName: 'hardOperation', args: [coeffitient], res });
+
+    // Process the queue
+    processQueue();
 });
 
 app.get('/test', (req, res) => {
@@ -26,5 +42,5 @@ app.get('/test', (req, res) => {
 });
 
 app.listen(3000, () => {
-    console.log("listening on port 3000");
+    console.log('listening on port 3000');
 });
